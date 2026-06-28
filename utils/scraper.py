@@ -192,23 +192,34 @@ def _parse_remoteok_date(item: dict) -> Optional[str]:
 
 # Mapping kata kunci ke nilai standar tipe kontrak
 _CONTRACT_ALIASES: dict[str, str] = {
-    # Full-time
+    # Full-time (EN)
     "full-time": "Full-time", "full time": "Full-time", "fulltime": "Full-time",
     "permanent": "Full-time",
-    # Part-time
+    # Full-time (ID) — SerpApi Indonesia mengembalikan nilai dalam Bahasa Indonesia
+    "pekerjaan tetap": "Full-time", "tetap": "Full-time",
+    "penuh waktu": "Full-time", "waktu penuh": "Full-time",
+    # Part-time (EN)
     "part-time": "Part-time", "part time": "Part-time", "parttime": "Part-time",
-    # Contract
-    "contract": "Contract", "kontrak": "Contract", "fixed-term": "Contract",
-    "fixed term": "Contract",
-    # Freelance
+    # Part-time (ID)
+    "paruh waktu": "Part-time", "setengah waktu": "Part-time",
+    # Contract (EN)
+    "contract": "Contract", "fixed-term": "Contract", "fixed term": "Contract",
+    # Contract (ID)
+    "kontrak": "Contract", "pekerjaan kontrak": "Contract",
+    # Freelance (EN)
     "freelance": "Freelance", "freelancer": "Freelance", "independent": "Freelance",
-    # Internship
-    "internship": "Internship", "intern": "Internship", "magang": "Internship",
-    "graduate": "Internship",
-    # Remote (bisa dikombinasikan, tapi beberapa sumber menaruhnya di sini)
+    # Freelance (ID)
+    "lepas": "Freelance", "pekerja lepas": "Freelance",
+    # Internship (EN)
+    "internship": "Internship", "intern": "Internship", "graduate": "Internship",
+    # Internship (ID)
+    "magang": "Internship", "praktik kerja": "Internship", "pkl": "Internship",
+    # Temporary (EN)
+    "temporary": "Temporary", "temp": "Temporary",
+    # Temporary (ID)
+    "sementara": "Temporary", "tidak tetap": "Temporary",
+    # Remote
     "remote": "Remote",
-    # Temporary
-    "temporary": "Temporary", "temp": "Temporary", "sementara": "Temporary",
 }
 
 

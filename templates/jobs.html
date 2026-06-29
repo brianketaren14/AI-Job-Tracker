@@ -63,11 +63,11 @@
       {# Tampilkan tanggal publikasi jika tersedia, fallback ke created_at #}
       {% if job.published_at %}
       <span class="job-date" data-ts="{{ job.published_at }}" title="Dipublikasikan: {{ job.published_at }}">
-        📅 <time datetime="{{ job.published_at[:10] }}">{{ job.published_at }}</time>
+        📅 <time datetime="{{ job.published_at }}">{{ job.published_at }}</time>
       </span>
       {% else %}
       <span class="job-date" data-ts="{{ job.created_at }}" title="Ditambahkan: {{ job.created_at }}">
-        🕐 <time datetime="{{ job.created_at[:10] }}">{{ job.created_at }}</time>
+        🕐 <time datetime="{{ job.created_at }}">{{ job.created_at }}</time>
       </span>
       {% endif %}
     </div>
@@ -104,16 +104,21 @@
 
 {# Format semua timestamp di halaman menjadi "DD MMM YYYY" yang mudah dibaca #}
 <script>
-  // document.querySelectorAll('.job-date time').forEach(function (el) {
-  //   const raw = el.getAttribute('datetime');
-  //   if (!raw) return;
-  //   try {
-  //     const d = new Date(raw);
-  //     if (isNaN(d.getTime())) return;
-  //     el.textContent = d.toLocaleDateString('id-ID', {
-  //       day: '2-digit', month: 'short', year: 'numeric'
-  //     });
-  //   } catch (e) { }
-  // });
+  document.querySelectorAll('.job-date time').forEach(el => {
+    const raw = el.getAttribute('datetime');
+    if (!raw) return;
+
+    const d = new Date(raw);
+    if (isNaN(d)) return;
+
+    el.textContent = d.toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  });
+
 </script>
 {% endblock %}

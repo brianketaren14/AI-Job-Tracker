@@ -22,8 +22,8 @@ _scheduler: BackgroundScheduler | None = None
 QUERIES         = [q.strip() for q in os.getenv("JOB_QUERIES", "Data Scientist,AI Engineer,ML Engineer").split(",")]
 LOCATION        = os.getenv("JOB_LOCATION", "Indonesia")
 WIB             = ZoneInfo("Asia/Jakarta")           # UTC+7
-SCHEDULE_HOUR   = int(os.getenv("SCHEDULE_HOUR",   "8"))  # default: 08:00 WIB
-SCHEDULE_MINUTE = int(os.getenv("SCHEDULE_MINUTE", "0"))
+SCHEDULE_HOUR   = int(os.getenv("SCHEDULE_HOUR"))  # default: 08:00 WIB
+SCHEDULE_MINUTE = int(os.getenv("SCHEDULE_MINUTE"))
 
 
 # ── Core pipeline function ────────────────────────────────────────

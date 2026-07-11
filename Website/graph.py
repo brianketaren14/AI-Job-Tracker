@@ -14,7 +14,6 @@ from typing import TypedDict, Literal, Optional
 import requests
 import serpapi
 from dotenv import load_dotenv
-from IPython.display import Image, display
 from pydantic import BaseModel, Field, model_validator
 from supabase import Client, create_client
 
@@ -25,7 +24,6 @@ load_dotenv()
 # ==========================
 from langchain.agents import create_agent
 from langchain_groq import ChatGroq
-from langchain_nvidia_ai_endpoints import ChatNVIDIADynamo
 
 from langgraph.graph import StateGraph, START, END
 

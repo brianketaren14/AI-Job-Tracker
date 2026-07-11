@@ -1,13 +1,10 @@
 import os
-import threading
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, render_template, request
 from supabase import Client, create_client
 from dotenv import load_dotenv
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 
 load_dotenv()
 
@@ -16,68 +13,54 @@ app = Flask(__name__)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+CRON_SECRET = os.getenv("CRON_SECRET")  # dicocokkan dengan header dari Vercel Cron
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+WIB = ZoneInfo("Asia/Jakarta")
+
+
 # ─────────────────────────────────────────────
-# Scraping state (in-memory, per-process)
+# Scrape status -> disimpan di Supabase (tabel scrape_log)
+# Bukan lagi di memory Python, karena tiap request di Vercel
+# bisa masuk ke instance/container yang berbeda-beda.
 # ─────────────────────────────────────────────
-scrape_status = {
-    "running": False,
-    "last_run": None,
-    "last_run_status": None,   # "success" | "error"
-    "last_run_message": "",
-    "history": [],             # list of {time, status, message}
-}
-scrape_lock = threading.Lock()
 
+def run_graph_and_log():
+    """Jalankan LangGraph pipeline secara SYNCHRONOUS dan catat hasilnya ke Supabase."""
+    from graph import call_graph  # lazy import supaya Flask tetap start walau ada masalah di graph.py
 
-def run_graph():
-    """Jalankan LangGraph pipeline di thread terpisah."""
-    from graph import call_graph   # import lazy supaya Flask tidak crash kalau deps belum siap
-    wib = ZoneInfo("Asia/Jakarta")
-    start_time = datetime.now(wib)
+    start_time = datetime.now(WIB)
 
-    with scrape_lock:
-        scrape_status["running"] = True
+    # tandai "running" di Supabase supaya /api/scrape/status bisa baca dari instance manapun
+    supabase.table("scrape_log").insert({
+        "status": "running",
+        "message": "Scraping sedang berjalan.",
+        "started_at": start_time.isoformat(),
+    }).execute()
 
     try:
         call_graph()
         status, message = "success", "Scraping selesai tanpa error."
     except Exception as e:
         status, message = "error", str(e)
-    finally:
-        end_time = datetime.now(wib)
-        entry = {
-            "time": end_time.strftime("%Y-%m-%d %H:%M:%S WIB"),
-            "status": status,
-            "message": message,
-            "duration_sec": round((end_time - start_time).total_seconds()),
-        }
-        with scrape_lock:
-            scrape_status["running"] = False
-            scrape_status["last_run"] = entry["time"]
-            scrape_status["last_run_status"] = status
-            scrape_status["last_run_message"] = message
-            scrape_status["history"].insert(0, entry)
-            scrape_status["history"] = scrape_status["history"][:20]   # simpan 20 terakhir
+
+    end_time = datetime.now(WIB)
+    duration = round((end_time - start_time).total_seconds())
+
+    supabase.table("scrape_log").insert({
+        "status": status,
+        "message": message,
+        "started_at": start_time.isoformat(),
+        "finished_at": end_time.isoformat(),
+        "duration_sec": duration,
+    }).execute()
+
+    return status, message, duration
 
 
 # ─────────────────────────────────────────────
-# APScheduler – setiap hari 12:00 WIB
-# ─────────────────────────────────────────────
-scheduler = BackgroundScheduler(timezone="Asia/Jakarta")
-scheduler.add_job(
-    run_graph,
-    trigger=CronTrigger(hour=0, minute=0, timezone="Asia/Jakarta"),
-    id="daily_scrape",
-    replace_existing=True,
-)
-scheduler.start()
-
-
-# ─────────────────────────────────────────────
-# ROUTES
+# ROUTES - Halaman
 # ─────────────────────────────────────────────
 
 @app.route("/")
@@ -152,9 +135,7 @@ def api_jobs():
 def api_job_detail(job_id):
     result = (
         supabase.table("lowongan")
-        .select(
-            "*, lowongan_skill(skill(nama_skill))"
-        )
+        .select("*, lowongan_skill(skill(nama_skill))")
         .eq("id_lowongan", job_id)
         .single()
         .execute()
@@ -221,11 +202,7 @@ def api_jobs_per_day():
 
 @app.route("/api/analytics/schedule-type")
 def api_schedule_type():
-    result = (
-        supabase.table("lowongan")
-        .select("schedule_type")
-        .execute()
-    )
+    result = supabase.table("lowongan").select("schedule_type").execute()
     from collections import Counter
     counter = Counter()
     for row in result.data:
@@ -259,7 +236,7 @@ def api_analytics_summary():
 
 
 # ─────────────────────────────────────────────
-# API – Scrape trigger & status
+# API – Scrape trigger (manual, synchronous) & status
 # ─────────────────────────────────────────────
 
 @app.route("/api/scrape/trigger", methods=["POST"])
@@ -269,20 +246,67 @@ def api_scrape_trigger():
     if password != ADMIN_PASSWORD:
         return jsonify({"error": "Password salah."}), 403
 
-    with scrape_lock:
-        if scrape_status["running"]:
-            return jsonify({"error": "Scraping sedang berjalan."}), 409
+    # cek apakah masih ada yang "running" (belum lebih dari 15 menit, jaga2 kalau macet)
+    running = (
+        supabase.table("scrape_log")
+        .select("*")
+        .eq("status", "running")
+        .order("started_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if running.data:
+        return jsonify({"error": "Scraping sedang berjalan."}), 409
 
-    thread = threading.Thread(target=run_graph, daemon=True)
-    thread.start()
-    return jsonify({"message": "Scraping dimulai."})
+    # PENTING: dijalankan synchronous (bukan thread) karena Vercel serverless
+    # membekukan/mematikan proses begitu response dikirim.
+    # Kalau scraping-nya lama, naikkan `maxDuration` di vercel.json,
+    # atau pakai endpoint /api/cron/scrape lewat Vercel Cron untuk job terjadwal.
+    status, message, duration = run_graph_and_log()
+
+    if status == "error":
+        return jsonify({"error": message}), 500
+    return jsonify({"message": message, "duration_sec": duration})
 
 
 @app.route("/api/scrape/status")
 def api_scrape_status():
-    with scrape_lock:
-        return jsonify(dict(scrape_status))
+    result = (
+        supabase.table("scrape_log")
+        .select("*")
+        .order("started_at", desc=True)
+        .limit(20)
+        .execute()
+    )
+    history = result.data or []
+    last = history[0] if history else None
+
+    return jsonify({
+        "running": bool(last and last["status"] == "running"),
+        "last_run": (last or {}).get("finished_at") or (last or {}).get("started_at"),
+        "last_run_status": (last or {}).get("status"),
+        "last_run_message": (last or {}).get("message", ""),
+        "history": history,
+    })
+
+
+# ─────────────────────────────────────────────
+# API – Cron endpoint (dipanggil otomatis oleh Vercel Cron)
+# ─────────────────────────────────────────────
+
+@app.route("/api/cron/scrape")
+def api_cron_scrape():
+    # Vercel Cron mengirim header "Authorization: Bearer <CRON_SECRET>"
+    # kalau env var CRON_SECRET di-set di project settings.
+    auth_header = request.headers.get("Authorization", "")
+    if CRON_SECRET and auth_header != f"Bearer {CRON_SECRET}":
+        return jsonify({"error": "Unauthorized"}), 401
+
+    status, message, duration = run_graph_and_log()
+    if status == "error":
+        return jsonify({"error": message}), 500
+    return jsonify({"message": message, "duration_sec": duration})
 
 
 if __name__ == "__main__":
-    app.run(debug=True, use_reloader=False)
+    app.run(debug=True)

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "paketo"
+  },
+  "deploy": {
+    "restartPolicyType": "on_failure",
+    "restartPolicyMaxRetries": 5,
+    "startCommand": "gunicorn -w 1 -b 0.0.0.0:$PORT --timeout 120 app:app"
+  },
+  "env": {
+    "PYTHON_VERSION": "3.12.0",
+    "PORT": {
+      "description": "Port for the application",
+      "value": "8000"
+    },
+    "FLASK_ENV": {
+      "description": "Flask environment mode",
+      "value": "production"
+    }
+  },
+  "plugins": [
+    {
+      "source": "https://github.com/railwayapp/railway-templates/releases/download/python/1.0.0/plugin.json"
+    }
+  ]
+}

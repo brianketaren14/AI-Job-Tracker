@@ -15,7 +15,7 @@ app = Flask(__name__)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 

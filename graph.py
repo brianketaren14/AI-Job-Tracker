@@ -14,7 +14,6 @@ from typing import TypedDict, Literal, Optional
 import requests
 import serpapi
 from dotenv import load_dotenv
-from IPython.display import Image, display
 from pydantic import BaseModel, Field, model_validator
 from supabase import Client, create_client
 
